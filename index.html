@@ -1,0 +1,112 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>vault</title>
+<style>
+ :root{--bg:#16171a;--card:#1e2024;--bd:#2e3238;--tx:#d7dade;--mut:#8b9097;--bp:#5865f2;--ok:#23a55a}
+ *{box-sizing:border-box}
+ body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  display:flex;min-height:100vh;align-items:center;justify-content:center;padding:24px}
+ #box{width:100%;max-width:420px}
+ h1{font-size:38px;margin:0 0 4px;text-align:center}
+ .sub{color:var(--mut);text-align:center;margin:0 0 22px;font-size:14px}
+ input{width:100%;background:var(--card);border:1px solid var(--bd);color:#e8eaed;border-radius:8px;padding:12px 14px;
+  font:inherit;outline:none;letter-spacing:.4px}
+ input:focus{border-color:#555b64}
+ button{margin-top:10px;width:100%;background:var(--bp);border:0;color:#fff;border-radius:8px;padding:12px;
+  font:inherit;font-weight:600;cursor:pointer}
+ button:hover{filter:brightness(1.1)}
+ #msg{min-height:20px;color:var(--mut);font-size:13px;text-align:center;margin-top:10px}
+ #msg.err{color:#e5646c}
+ #cards{margin-top:18px;display:flex;flex-direction:column;gap:10px}
+ .card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:13px 15px;position:relative}
+ .card .nm{font-weight:600;font-size:15px}
+ .card .nt{color:var(--mut);font-size:12.5px;margin-top:2px}
+ .card .slug{color:#5c616a;font-size:11.5px;margin-top:4px;font-family:ui-monospace,Menlo,monospace}
+ .card .row{display:flex;gap:8px;margin-top:10px}
+ .card .open{flex:1;margin:0;background:#3a3f47}
+ .card .open:hover{background:#464c55}
+ .card .x{position:absolute;top:8px;right:10px;color:#5c616a;border:0;background:none;width:auto;margin:0;
+  padding:2px 6px;font-size:14px;cursor:pointer}
+ .card .x:hover{color:#e5646c}
+ .foot{color:#4a4e55;font-size:11.5px;text-align:center;margin-top:26px}
+ .dots{color:#3d4147;text-align:center;font-size:11px;letter-spacing:2px;margin-top:-14px;margin-bottom:16px}
+ @keyframes spin{to{transform:rotate(360deg)}}
+ .spin{display:inline-block;width:12px;height:12px;border:2px solid #555;border-top-color:#aaa;border-radius:50%;
+  animation:spin .7s linear infinite;vertical-align:-2px;margin-right:6px}
+</style></head><body>
+<div id="box">
+<h1>🔒</h1>
+<p class="sub">enter a password to open the collections it unlocks</p>
+<div class="dots" id="dots"></div>
+<input id="pw" type="password" placeholder="password" autocomplete="off" autofocus>
+<button id="go">unlock</button>
+<p id="msg"></p>
+<div id="cards"></div>
+<p class="foot">nothing here identifies what any collection contains — only a matching password does.</p>
+</div>
+<script id="c" type="application/json">{"v":1,"n":1000000,"e":[{"s":"1YoFRn/Vy46mojvt5SSt8A==","i":"qzhQnASj1h7aNJ3L","d":"+dWJdBigJ2ctxMLRvzVgbKg/z2dDUPq6o8WOExRNl3sWbWBW6a/mZ4IOKkd8Q/0oxu0ZTS+sMKBwZe7MqKvSfelS4z4q+/3ApzAliejVn2ZaTjcTyPO1rle5xJyWPNR4BrVxtVSTmJgaTqyQ8OixNCnMUYfDyfnsfzSFw2kE27NaBqFw1mMjMNMHmomZcTMQTrwuEhv5Jf8fVDQGD+d39ZBQp4dfg8pgUSy4gg=="},{"s":"qv7lUBCxLBiyycpcDgenEQ==","i":"/Vco+b0xQU+OjlX7","d":"hLBvpBXK6j/pB5d3nTdoP4W2RRhHU4+o9EG0krIXceaHQVEEABHQa86fXd/wQfwdHgBRxkPztB0LDk9oeDsock38xSa2K5vOTNvZ78yGzhqWa7A+l3KdVI+keOQEYUkUDy+qKCdlrRZhAHNbQQD50aQr1T4ryGOxuy0DTkAJPnaADE6VKc5ZKyJ3l6VCVRU="}]}</script>
+<script>
+(function(){
+'use strict';
+var D=JSON.parse(document.getElementById('c').textContent);
+var ITER=D.n, ENTRIES=D.e, LS='hub.v1';
+var enc=new TextEncoder(),dec=new TextDecoder();
+var pwEl=document.getElementById('pw'),goEl=document.getElementById('go'),msgEl=document.getElementById('msg');
+var cardsEl=document.getElementById('cards'),dotsEl=document.getElementById('dots');
+function b64(s){return Uint8Array.from(atob(s),function(c){return c.charCodeAt(0)})}
+function slug(u){try{var p=new URL(u).pathname.split('/').filter(Boolean);return p[p.length-1]||''}catch(e){return''}}
+function store(){try{return JSON.parse(localStorage.getItem(LS)||'[]')}catch(e){return[]}}
+function save(list){try{localStorage.setItem(LS,JSON.stringify(list))}catch(e){}}
+function attempt(pw,e){
+ return crypto.subtle.importKey('raw',enc.encode(pw),'PBKDF2',false,['deriveKey']).then(function(km){
+  return crypto.subtle.deriveKey({name:'PBKDF2',salt:b64(e.s),iterations:ITER,hash:'SHA-256'},km,
+   {name:'AES-GCM',length:256},false,['decrypt']);
+ }).then(function(k){
+  return crypto.subtle.decrypt({name:'AES-GCM',iv:b64(e.i)},k,b64(e.d));
+ }).then(function(pt){return JSON.parse(dec.decode(pt))});
+}
+function render(list){
+ cardsEl.innerHTML='';
+ for(var i=0;i<list.length;i++)(function(it){
+  var c=document.createElement('div');c.className='card';
+  var nm=document.createElement('div');nm.className='nm';nm.textContent=it.name;
+  var nt=document.createElement('div');nt.className='nt';nt.textContent=it.note||'';
+  var sl=document.createElement('div');sl.className='slug';sl.textContent=slug(it.url);
+  var row=document.createElement('div');row.className='row';
+  var op=document.createElement('button');op.className='open';op.textContent='open ↗';
+  op.onclick=function(){try{sessionStorage.setItem('__ss_pw',it.pw)}catch(e){};location.href=it.url};
+  row.appendChild(op);
+  var x=document.createElement('button');x.className='x';x.textContent='✕';x.title='forget';
+  x.onclick=function(){var l=store().filter(function(z){return z.url!==it.url});save(l);render(l)};
+  c.appendChild(nm);c.appendChild(nt);c.appendChild(sl);c.appendChild(row);c.appendChild(x);
+  cardsEl.appendChild(c);
+ })(list[i]);
+}
+function refreshDots(){dotsEl.textContent=ENTRIES.map(function(){return'●'}).join(' ')}
+refreshDots();
+render(store());
+function unlock(){
+ var pw=pwEl.value;if(!pw)return;
+ msgEl.className='';msgEl.innerHTML='<span class="spin"></span>checking…';
+ goEl.disabled=true;
+ Promise.all(ENTRIES.map(function(e){return attempt(pw,e).then(function(pt){return pt},function(){return null})}))
+ .then(function(res){
+  goEl.disabled=false;
+  var got=[];
+  for(var i=0;i<res.length;i++)if(res[i])got.push(res[i]);
+  if(!got.length){msgEl.className='err';msgEl.textContent='no collection matches that password.';return}
+  msgEl.textContent=got.length+' collection'+(got.length>1?'s':'')+' unlocked';
+  var list=store();
+  for(var j=0;j<got.length;j++){
+   var g=got[j];g.pw=pw;
+   var ix=-1;for(var k=0;k<list.length;k++)if(list[k].url===g.url)ix=k;
+   if(ix>=0)list[ix]=g;else list.push(g);
+  }
+  save(list);render(list);pwEl.value='';
+ })
+ .catch(function(){goEl.disabled=false;msgEl.className='err';msgEl.textContent='unlock failed'});
+}
+goEl.addEventListener('click',unlock);
+pwEl.addEventListener('keydown',function(e){if(e.key==='Enter')unlock()});
+})();
+</script></body></html>
